@@ -128,7 +128,7 @@ def get_data(dataset_name):
 def get_config(lrs, epochs, epochs_inf, epoch_n):
     mod = sys.modules['__main__']
 
-    logdir = os.path.join(PATH, '{}'.format(args.name))
+    logdir = os.path.join(PATH, '{logdir}')
     logger.set_logger_dir(logdir)
 
     # import shutil
