@@ -177,6 +177,6 @@ if __name__ == '__main__':
     assert len(args.epochs) == len(args.lrs)
 
     config = get_config(args.lrs, args.epochs, args.epochs_inf, args.epoch_n)
-    config.nr_tower = 0
+    config.nr_tower = 1
 
     SyncMultiGPUTrainer(config).train()
