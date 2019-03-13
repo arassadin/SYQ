@@ -7,6 +7,7 @@ import os, sys
 from tensorpack import *
 from tensorpack.tfutils.symbolic_functions import *
 from tensorpack.tfutils.summary import *
+from tensorpack.models.batch_norm import BatchNormV1 as BatchNorm
 
 
 BATCH_SIZE = 32
@@ -86,6 +87,7 @@ def get_data(dataset_name):
     # pp_mean_224 = pp_mean[16:-16, 16:-16,:]
 
     augmentors = [imgaug.MeanVarianceNormalize()]
+
     if isTrain:
         class Resize(imgaug.ImageAugmentor):
 

@@ -14,7 +14,7 @@ from ..tfutils.tower import get_current_tower_context
 from ..utils import logger
 from ._common import layer_register
 
-__all__ = ['BatchNorm', 'BatchNormV2']
+__all__ = ['BatchNorm', 'BatchNormV1', 'BatchNormV2']
 
 # def BatchNorm(inputs, axis=None, training=None, momentum=0.9, epsilon=1e-5,
 #               center=True, scale=True,
@@ -197,100 +197,100 @@ __all__ = ['BatchNorm', 'BatchNormV2']
 #             vh.beta = beta
 #     return ret
 
-# # decay: being too close to 1 leads to slow start-up. torch use 0.9.
-# # eps: torch: 1e-5. Lasagne: 1e-4
-# @layer_register(log_shape=False)
-# def BatchNormV1(x, use_local_stat=None, decay=0.9, epsilon=1e-5):
-#     """
-#     Batch normalization layer as described in:
+# decay: being too close to 1 leads to slow start-up. torch use 0.9.
+# eps: torch: 1e-5. Lasagne: 1e-4
+@layer_register(log_shape=False)
+def BatchNormV1(x, use_local_stat=None, decay=0.9, epsilon=1e-5):
+    """
+    Batch normalization layer as described in:
 
-#     `Batch Normalization: Accelerating Deep Network Training by
-#     Reducing Internal Covariance Shift <http://arxiv.org/abs/1502.03167>`_.
+    `Batch Normalization: Accelerating Deep Network Training by
+    Reducing Internal Covariance Shift <http://arxiv.org/abs/1502.03167>`_.
 
-#     :param input: a NHWC or NC tensor
-#     :param use_local_stat: bool. whether to use mean/var of this batch or the moving average.
-#         Default to True in training and False in inference.
-#     :param decay: decay rate. default to 0.9.
-#     :param epsilon: default to 1e-5.
+    :param input: a NHWC or NC tensor
+    :param use_local_stat: bool. whether to use mean/var of this batch or the moving average.
+        Default to True in training and False in inference.
+    :param decay: decay rate. default to 0.9.
+    :param epsilon: default to 1e-5.
 
-#     Note that only the first training tower maintains a moving average.
-#     """
+    Note that only the first training tower maintains a moving average.
+    """
 
-#     shape = x.get_shape().as_list()
-#     assert len(shape) in [2, 4]
+    shape = x.get_shape().as_list()
+    assert len(shape) in [2, 4]
 
-#     n_out = shape[-1]  # channel
-#     assert n_out is not None
-#     beta = tf.get_variable('beta', [n_out],
-#             initializer=tf.constant_initializer())
-#     gamma = tf.get_variable('gamma', [n_out],
-#             initializer=tf.constant_initializer(1.0))
+    n_out = shape[-1]  # channel
+    assert n_out is not None
+    beta = tf.get_variable('beta', [n_out],
+            initializer=tf.constant_initializer())
+    gamma = tf.get_variable('gamma', [n_out],
+            initializer=tf.constant_initializer(1.0))
 
-#     if len(shape) == 2:
-#         batch_mean, batch_var = tf.nn.moments(x, [0], keep_dims=False)
-#     else:
-#         batch_mean, batch_var = tf.nn.moments(x, [0, 1, 2], keep_dims=False)
-#     # just to make a clear name.
-#     batch_mean = tf.identity(batch_mean, 'mean')
-#     batch_var = tf.identity(batch_var, 'variance')
+    if len(shape) == 2:
+        batch_mean, batch_var = tf.nn.moments(x, [0], keep_dims=False)
+    else:
+        batch_mean, batch_var = tf.nn.moments(x, [0, 1, 2], keep_dims=False)
+    # just to make a clear name.
+    batch_mean = tf.identity(batch_mean, 'mean')
+    batch_var = tf.identity(batch_var, 'variance')
 
-#     emaname = 'EMA'
-#     ctx = get_current_tower_context()
-#     if use_local_stat is None:
-#         use_local_stat = ctx.is_training
-#     if use_local_stat != ctx.is_training:
-#         logger.warn("[BatchNorm] use_local_stat != is_training")
+    emaname = 'EMA'
+    ctx = get_current_tower_context()
+    if use_local_stat is None:
+        use_local_stat = ctx.is_training
+    if use_local_stat != ctx.is_training:
+        logger.warn("[BatchNorm] use_local_stat != is_training")
 
-#     if use_local_stat:
-#         # training tower
-#         if ctx.is_training:
-#             #reuse = tf.get_variable_scope().reuse
-#             with tf.variable_scope(tf.get_variable_scope(), reuse=False):
-#                 # BatchNorm in reuse scope can be tricky! Moving mean/variance are not reused
-#                 with tf.name_scope(None): # https://github.com/tensorflow/tensorflow/issues/2740
-#                     # TODO if reuse=True, try to find and use the existing statistics
-#                     # how to use multiple tensors to update one EMA? seems impossbile
-#                     ema = tf.train.ExponentialMovingAverage(decay=decay, name=emaname)
-#                     ema_apply_op = ema.apply([batch_mean, batch_var])
-#                     ema_mean, ema_var = ema.average(batch_mean), ema.average(batch_var)
-#                     if ctx.is_main_training_tower:
-#                         # inside main training tower
-#                         add_model_variable(ema_mean)
-#                         add_model_variable(ema_var)
-#     else:
-#         # no apply() is called here, no magic vars will get created,
-#         # no reuse issue will happen
-#         assert not ctx.is_training
-#         with tf.name_scope(None):
-#             ema = tf.train.ExponentialMovingAverage(decay=decay, name=emaname)
-#             mean_var_name = ema.average_name(batch_mean)
-#             var_var_name = ema.average_name(batch_var)
-#             sc = tf.get_variable_scope()
-#             if ctx.is_main_tower:
-#                 # main tower, but needs to use global stat. global stat must be from outside
-#                 # TODO when reuse=True, the desired variable name could
-#                 # actually be different, because a different var is created
-#                 # for different reuse tower
-#                 ema_mean = tf.get_variable('mean/' + emaname, [n_out])
-#                 ema_var = tf.get_variable('variance/' + emaname, [n_out])
-#             else:
-#                 ## use statistics in another tower
-#                 G = tf.get_default_graph()
-#                 ema_mean = ctx.find_tensor_in_main_tower(G, mean_var_name + ':0')
-#                 ema_var = ctx.find_tensor_in_main_tower(G, var_var_name + ':0')
+    if use_local_stat:
+        # training tower
+        if ctx.is_training:
+            #reuse = tf.get_variable_scope().reuse
+            with tf.variable_scope(tf.get_variable_scope(), reuse=False):
+                # BatchNorm in reuse scope can be tricky! Moving mean/variance are not reused
+                with tf.name_scope(None): # https://github.com/tensorflow/tensorflow/issues/2740
+                    # TODO if reuse=True, try to find and use the existing statistics
+                    # how to use multiple tensors to update one EMA? seems impossbile
+                    ema = tf.train.ExponentialMovingAverage(decay=decay, name=emaname)
+                    ema_apply_op = ema.apply([batch_mean, batch_var])
+                    ema_mean, ema_var = ema.average(batch_mean), ema.average(batch_var)
+                    if ctx.is_main_training_tower:
+                        # inside main training tower
+                        add_model_variable(ema_mean)
+                        add_model_variable(ema_var)
+    else:
+        # no apply() is called here, no magic vars will get created,
+        # no reuse issue will happen
+        assert not ctx.is_training
+        with tf.name_scope(None):
+            ema = tf.train.ExponentialMovingAverage(decay=decay, name=emaname)
+            mean_var_name = ema.average_name(batch_mean)
+            var_var_name = ema.average_name(batch_var)
+            sc = tf.get_variable_scope()
+            if ctx.is_main_tower:
+                # main tower, but needs to use global stat. global stat must be from outside
+                # TODO when reuse=True, the desired variable name could
+                # actually be different, because a different var is created
+                # for different reuse tower
+                ema_mean = tf.get_variable('mean/' + emaname, [n_out])
+                ema_var = tf.get_variable('variance/' + emaname, [n_out])
+            else:
+                ## use statistics in another tower
+                G = tf.get_default_graph()
+                ema_mean = ctx.find_tensor_in_main_tower(G, mean_var_name + ':0')
+                ema_var = ctx.find_tensor_in_main_tower(G, var_var_name + ':0')
 
-#     if use_local_stat:
-#         batch = tf.cast(tf.shape(x)[0], tf.float32)
-#         mul = tf.where(tf.equal(batch, 1.0), 1.0, batch / (batch - 1))
-#         batch_var = batch_var * mul  # use unbiased variance estimator in training
+    if use_local_stat:
+        batch = tf.cast(tf.shape(x)[0], tf.float32)
+        mul = tf.where(tf.equal(batch, 1.0), 1.0, batch / (batch - 1))
+        batch_var = batch_var * mul  # use unbiased variance estimator in training
 
-#         with tf.control_dependencies([ema_apply_op] if ctx.is_training else []):
-#             # only apply EMA op if is_training
-#             return tf.nn.batch_normalization(
-#                 x, batch_mean, batch_var, beta, gamma, epsilon, 'output')
-#     else:
-#         return tf.nn.batch_normalization(
-#             x, ema_mean, ema_var, beta, gamma, epsilon, 'output')
+        with tf.control_dependencies([ema_apply_op] if ctx.is_training else []):
+            # only apply EMA op if is_training
+            return tf.nn.batch_normalization(
+                x, batch_mean, batch_var, beta, gamma, epsilon, 'output')
+    else:
+        return tf.nn.batch_normalization(
+            x, ema_mean, ema_var, beta, gamma, epsilon, 'output')
 
 @layer_register(log_shape=False)
 def BatchNormV2(x, use_local_stat=True, decay=0.9, epsilon=1e-5, post_scale=True):
@@ -327,11 +327,10 @@ def BatchNormV2(x, use_local_stat=True, decay=0.9, epsilon=1e-5, post_scale=True
         gamma = 0.*gamma + tf.ones_like(gamma)
 
     ctx = get_current_tower_context()
-#     if use_local_stat is None:
-#         use_local_stat = ctx.is_training
-    print(use_local_stat)
-#     if use_local_stat != ctx.is_training:
-#         logger.warn("[BatchNorm] use_local_stat != is_training")
+    if use_local_stat is None:
+        use_local_stat = ctx.is_training
+    if use_local_stat != ctx.is_training:
+        logger.warn("[BatchNorm] use_local_stat != is_training")
 
     #with tf.variable_scope('bn' + str(shape[3]), reuse=tf.AUTO_REUSE):
     moving_mean = tf.get_variable('mean/EMA', [n_out],
@@ -359,9 +358,9 @@ def BatchNormV2(x, use_local_stat=True, decay=0.9, epsilon=1e-5, post_scale=True
         # consider some fixed-param tasks, such as load model and fine tune one layer
 
         # fused seems slower in inference
-        #xn, _, _ = tf.nn.fused_batch_norm(x, gamma, beta,
-                #moving_mean, moving_var,
-                #epsilon=epsilon, is_training=False, name='output')
+        # xn, _, _ = tf.nn.fused_batch_norm(x, gamma, beta,
+                # moving_mean, moving_var,
+                # epsilon=epsilon, is_training=False, name='output')
         xn = tf.nn.batch_normalization(
             x, moving_mean, moving_var, beta, gamma, epsilon)
 
@@ -371,5 +370,3 @@ def BatchNormV2(x, use_local_stat=True, decay=0.9, epsilon=1e-5, post_scale=True
             return tf.identity(xn, name='output')
     else:
         return tf.identity(xn, name='output')
-
-BatchNorm = BatchNormV2
