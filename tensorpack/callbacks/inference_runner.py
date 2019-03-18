@@ -95,7 +95,8 @@ class InferenceRunner(Callback):
         # list of list of (var_name: IOTensor)
 
     def _trigger_epoch(self):
-        if np.any(self.inf_epochs[:] == self.epoch_num): 
+        print('## start inference')
+        if self.epoch_num in self.inf_epochs: 
             for inf in self.infs:
                 inf.before_inference()
 
@@ -110,6 +111,7 @@ class InferenceRunner(Callback):
                         inf.datapoint(inf_output)
                     pbar.update()
             self._write_summary_after_inference()
+        print('## end inference')
 
     def _write_summary_after_inference(self):
         summary_inferencer(self.trainer, self.infs)

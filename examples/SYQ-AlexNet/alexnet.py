@@ -4,10 +4,12 @@ import argparse
 import numpy as np
 import os, sys
 
+sys.path.append('/home/alexandr/develop/SYQ')
+
 from tensorpack import *
 from tensorpack.tfutils.symbolic_functions import *
 from tensorpack.tfutils.summary import *
-from tensorpack.models.batch_norm import BatchNormV1 as BatchNorm
+from tensorpack.models.batch_norm import BatchNormV2 as BatchNorm
 
 
 BATCH_SIZE = 32
@@ -80,7 +82,7 @@ class Model(ModelDesc):
 
 def get_data(dataset_name):
     isTrain = dataset_name == 'train'
-    ds = dataset.ILSVRC12(args.data, dataset_name, shuffle=isTrain)
+    ds = dataset.Tiny(args.data, dataset_name, shuffle=isTrain)
 
     # meta = dataset.ILSVRCMeta()
     # pp_mean = meta.get_per_pixel_mean()
@@ -126,11 +128,10 @@ def get_data(dataset_name):
     return ds
 
 def get_config(lrs, epochs, epochs_inf, epoch_n):
-    mod = sys.modules['__main__']
-
-    logdir = os.path.join(PATH, '{logdir}')
+    logdir = os.path.join(PATH, 'logdir')
     logger.set_logger_dir(logdir)
 
+    # mod = sys.modules['__main__']
     # import shutil
     # shutil.copy(mod.__file__, logger.LOG_DIR)
 
@@ -165,12 +166,12 @@ def get_config(lrs, epochs, epochs_inf, epoch_n):
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data', help='ILSVRC dataset dir', default='/home/stasysp/Envs/shad/SYQ/tiny-imagenet-200')
+    parser.add_argument('--data', help='ILSVRC dataset dir', default='/home/alexandr/datasets/tiny-imagenet-200')
     parser.add_argument('--lrs', type=float, nargs='+', metavar='LR', default=[1e-3],
                         help='Learning rates to use during training, first value is the initial learning rate')
     parser.add_argument('--epochs', type=int, nargs='+', metavar='E', default=[0],
                         help='Epochs to change the learning rate, last value is the maximum number of epochs')
-    parser.add_argument('--epochs-inf', type=int, nargs='+', metavar='I', default=list(np.arange(1,121)))
+    parser.add_argument('--epochs-inf', type=int, nargs='+', metavar='I', default=list(np.arange(500)))
     parser.add_argument('--epoch_n', type=int, default=500)
     args = parser.parse_args()
 
@@ -179,4 +180,5 @@ if __name__ == '__main__':
     config = get_config(args.lrs, args.epochs, args.epochs_inf, args.epoch_n)
     config.nr_tower = 1
 
-    SyncMultiGPUTrainer(config).train()
+    # SyncMultiGPUTrainer(config).train()
+    SimpleTrainer(config).train()

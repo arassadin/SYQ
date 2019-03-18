@@ -327,6 +327,7 @@ def BatchNormV2(x, use_local_stat=True, decay=0.9, epsilon=1e-5, post_scale=True
         gamma = 0.*gamma + tf.ones_like(gamma)
 
     ctx = get_current_tower_context()
+    print(ctx.is_training)
     if use_local_stat is None:
         use_local_stat = ctx.is_training
     if use_local_stat != ctx.is_training:
@@ -370,3 +371,5 @@ def BatchNormV2(x, use_local_stat=True, decay=0.9, epsilon=1e-5, post_scale=True
             return tf.identity(xn, name='output')
     else:
         return tf.identity(xn, name='output')
+
+BatchNorm = BatchNormV2
