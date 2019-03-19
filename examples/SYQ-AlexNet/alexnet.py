@@ -4,12 +4,12 @@ import argparse
 import numpy as np
 import os, sys
 
-sys.path.append('/home/alexandr/develop/SYQ')
+# sys.path.append('/home/alexandr/develop/SYQ')
 
 from tensorpack import *
 from tensorpack.tfutils.symbolic_functions import *
 from tensorpack.tfutils.summary import *
-from tensorpack.models.batch_norm import BatchNormV2 as BatchNorm
+from tensorpack.models.batch_norm import BatchNorm
 
 
 BATCH_SIZE = 32
@@ -100,8 +100,8 @@ def get_data(dataset_name):
                 return  cv2.resize(img, (INP_SIZE, INP_SIZE), interpolation=cv2.INTER_CUBIC)
 
         augmentors += [
-            imgaug.RandomCrop((INP_SIZE - 10, INP_SIZE - 10)),
-            imgaug.RotationAndCropValid(20),
+            # imgaug.RandomCrop((INP_SIZE - 5, INP_SIZE - 5)),
+            imgaug.RotationAndCropValid(10),
             Resize(),
             imgaug.Flip(horiz=True),
             imgaug.GaussianBlur(),

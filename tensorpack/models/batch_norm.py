@@ -293,7 +293,7 @@ def BatchNormV1(x, use_local_stat=None, decay=0.9, epsilon=1e-5):
             x, ema_mean, ema_var, beta, gamma, epsilon, 'output')
 
 @layer_register(log_shape=False)
-def BatchNormV2(x, use_local_stat=True, decay=0.9, epsilon=1e-5, post_scale=True):
+def BatchNormV2(x, use_local_stat=None, decay=0.9, epsilon=1e-5, post_scale=True):
     """
     Batch normalization layer as described in:
 
