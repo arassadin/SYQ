@@ -12,7 +12,7 @@ from tensorpack.tfutils.summary import *
 from tensorpack.models.batch_norm import BatchNorm
 
 
-BATCH_SIZE = 128
+BATCH_SIZE = 64
 INP_SIZE = 64
 PATH = ''
 
@@ -62,7 +62,7 @@ class Model(ModelDesc):
                 .FullyConnected('fc1', 4096, W_init=gauss_init)
                 .BatchNorm('bnfc1')
                 .apply(activate)
-                .FullyConnected('fct', 1000, use_bias=True)()
+                .FullyConnected('fct', 200, use_bias=True)()
             )
 
         prob = tf.nn.softmax(logits, name='output')
