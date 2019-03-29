@@ -236,6 +236,7 @@ def BatchNormV1(x, use_local_stat=None, decay=0.9, epsilon=1e-5):
 
     emaname = 'EMA'
     ctx = get_current_tower_context()
+    # print(ctx.is_training)
     if use_local_stat is None:
         use_local_stat = ctx.is_training
     if use_local_stat != ctx.is_training:
@@ -244,8 +245,8 @@ def BatchNormV1(x, use_local_stat=None, decay=0.9, epsilon=1e-5):
     if use_local_stat:
         # training tower
         if ctx.is_training:
-            #reuse = tf.get_variable_scope().reuse
-            with tf.variable_scope(tf.get_variable_scope(), reuse=False):
+            # reuse = tf.get_variable_scope().reuse
+            with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
                 # BatchNorm in reuse scope can be tricky! Moving mean/variance are not reused
                 with tf.name_scope(None): # https://github.com/tensorflow/tensorflow/issues/2740
                     # TODO if reuse=True, try to find and use the existing statistics
@@ -265,19 +266,20 @@ def BatchNormV1(x, use_local_stat=None, decay=0.9, epsilon=1e-5):
             ema = tf.train.ExponentialMovingAverage(decay=decay, name=emaname)
             mean_var_name = ema.average_name(batch_mean)
             var_var_name = ema.average_name(batch_var)
-            sc = tf.get_variable_scope()
-            if ctx.is_main_tower:
-                # main tower, but needs to use global stat. global stat must be from outside
-                # TODO when reuse=True, the desired variable name could
-                # actually be different, because a different var is created
-                # for different reuse tower
+            with tf.variable_scope(tf.get_variable_scope(), reuse=tf.AUTO_REUSE):
+                sc = tf.get_variable_scope()
+                # if ctx.is_main_tower:
+                    # main tower, but needs to use global stat. global stat must be from outside
+                    # TODO when reuse=True, the desired variable name could
+                    # actually be different, because a different var is created
+                    # for different reuse tower
                 ema_mean = tf.get_variable('mean/' + emaname, [n_out])
                 ema_var = tf.get_variable('variance/' + emaname, [n_out])
-            else:
-                ## use statistics in another tower
-                G = tf.get_default_graph()
-                ema_mean = ctx.find_tensor_in_main_tower(G, mean_var_name + ':0')
-                ema_var = ctx.find_tensor_in_main_tower(G, var_var_name + ':0')
+                # else:
+                #     ## use statistics in another tower
+                #     G = tf.get_default_graph()
+                #     ema_mean = ctx.find_tensor_in_main_tower(G, mean_var_name + ':0')
+                #     ema_var = ctx.find_tensor_in_main_tower(G, var_var_name + ':0')
 
     if use_local_stat:
         batch = tf.cast(tf.shape(x)[0], tf.float32)
@@ -327,7 +329,7 @@ def BatchNormV2(x, use_local_stat=None, decay=0.9, epsilon=1e-5, post_scale=True
         gamma = 0.*gamma + tf.ones_like(gamma)
 
     ctx = get_current_tower_context()
-    print(ctx.is_training)
+    # print(ctx.is_training)
     if use_local_stat is None:
         use_local_stat = ctx.is_training
     if use_local_stat != ctx.is_training:

@@ -4,7 +4,7 @@ import argparse
 import numpy as np
 import os, sys
 
-# sys.path.append('/home/alexandr/develop/SYQ')
+sys.path.append('/home/alexandr/develop/SYQ')
 
 from tensorpack import *
 from tensorpack.tfutils.symbolic_functions import *
@@ -12,7 +12,7 @@ from tensorpack.tfutils.summary import *
 from tensorpack.models.batch_norm import BatchNorm
 
 
-BATCH_SIZE = 32
+BATCH_SIZE = 128
 INP_SIZE = 64
 PATH = ''
 
@@ -24,11 +24,12 @@ class Model(ModelDesc):
 
     def _build_graph(self, input_vars):
         image, label = input_vars
-        image = image / 255.0
+        # image = image / 255.0
+
+        gauss_init = tf.random_normal_initializer(stddev=0.01)
 
         def activate(x):
-            x = tf.nn.relu(x)
-            return x
+            return tf.nn.relu(x)
 
         with argscope(BatchNorm, decay=0.9, epsilon=1e-4), argscope([Conv2D, FullyConnected], use_bias=False, nl=tf.identity):
             logits = (
@@ -54,11 +55,11 @@ class Model(ModelDesc):
                 .MaxPooling('pool4', 5, 2, padding='VALID')
                 .apply(activate)
 
-                .FullyConnected('fc0', 4096)
+                .FullyConnected('fc0', 4096, W_init=gauss_init)
                 .BatchNorm('bnfc0')
                 .apply(activate)
 
-                .FullyConnected('fc1', 4096)
+                .FullyConnected('fc1', 4096, W_init=gauss_init)
                 .BatchNorm('bnfc1')
                 .apply(activate)
                 .FullyConnected('fct', 1000, use_bias=True)()
@@ -84,39 +85,19 @@ def get_data(dataset_name):
     isTrain = dataset_name == 'train'
     ds = dataset.Tiny(args.data, dataset_name, shuffle=isTrain)
 
-    # meta = dataset.ILSVRCMeta()
-    # pp_mean = meta.get_per_pixel_mean()
-    # pp_mean_224 = pp_mean[16:-16, 16:-16,:]
-
-    augmentors = [imgaug.MeanVarianceNormalize()]
+    augmentors = []
 
     if isTrain:
-        class Resize(imgaug.ImageAugmentor):
-
-            def __init__(self):
-                self._init(locals())
-
-            def _augment(self, img, _):
-                return  cv2.resize(img, (INP_SIZE, INP_SIZE), interpolation=cv2.INTER_CUBIC)
-
         augmentors += [
-            # imgaug.RandomCrop((INP_SIZE - 5, INP_SIZE - 5)),
-            imgaug.RotationAndCropValid(10),
-            Resize(),
-            imgaug.Flip(horiz=True),
-            imgaug.GaussianBlur(),
-            imgaug.Brightness(10),
-            #imgaug.Contrast(0.1),
-            #imgaug.Gamma(),
-            #imgaug.Clip(),
-            #imgaug.Saturation(0.1),
-            #imgaug.Lighting(0.1),
-            #imgaug.augmenters.PiecewiseAffine(scale=(0.01, 0.05)),
-            #imgaug.Contrast((0.8, 1.2)),
-            #imgaug.GaussianDeform([(0.2, 0.2), (0.7, 0.2), (0.8, 0.8), (0.5, 0.5), (0.2, 0.5)], (360, 480), 0.2, randrange=20),
-            # RandomCropRandomShape(0.3),
-            #imgaug.SaltPepperNoise()
-            #imgaug.MapImage(lambda x: x - pp_mean_224),
+            imgaug.Lighting(0.1,
+                            eigval=np.asarray(
+                                [0.2175, 0.0188, 0.0045][::-1]) * 255.0,
+                            eigvec=np.array(
+                                [[-0.5675, 0.7192, 0.4009],
+                                 [-0.5808, -0.0045, -0.8140],
+                                 [-0.5836, -0.6948, 0.4203]],
+                                dtype='float32')[::-1, ::-1]),
+            imgaug.Flip(horiz=True)
         ]
 
     ds = AugmentImageComponent(ds, augmentors)
@@ -178,7 +159,7 @@ if __name__ == '__main__':
     assert len(args.epochs) == len(args.lrs)
 
     config = get_config(args.lrs, args.epochs, args.epochs_inf, args.epoch_n)
-    config.nr_tower = 1
+    # config.nr_tower = 1
 
     # SyncMultiGPUTrainer(config).train()
     SimpleTrainer(config).train()
