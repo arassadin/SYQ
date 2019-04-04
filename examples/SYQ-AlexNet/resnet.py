@@ -110,11 +110,42 @@ def resnet_backbone(image, num_blocks, group_func, block_func):
         logits = FullyConnected('linear', l, 1000)#, initializer=tf.random_normal_initializer(stddev=0.01))
     return logits
 
+def resblock(x, channel, stride):
+        def get_stem_full(x):
+            return (LinearWrap(x)
+                    .Conv2D('c3x3a', channel, 3)
+                    .BatchNorm('stembn')
+                    .apply(activate)
+                    .Conv2D('c3x3b', channel, 3)())
+        channel_mismatch = channel != x.get_shape().as_list()[3]
+        if stride != 1 or channel_mismatch or 'pool1' in x.name:
+            # handling pool1 is to work around an architecture bug in our model
+            if stride != 1 or 'pool1' in x.name:
+                x = AvgPooling('pool', x, stride, stride)
+            x = BatchNorm('bn', x)
+            x = activate(x)
+            shortcut = Conv2D('shortcut', x, channel, 1)
+            stem = get_stem_full(x)
+        else:
+            shortcut = x
+            x = BatchNorm('bn', x)
+            x = activate(x)
+            stem = get_stem_full(x)
+        return shortcut + stem
+def group(x, name, channel, nr_block, stride):
+        with tf.variable_scope(name + 'blk1'):
+            x = resblock(x, channel, stride)
+        for i in range(2, nr_block + 1):
+            with tf.variable_scope(name + 'blk{}'.format(i)):
+                x = resblock(x, channel, 1)
+        return x
+
 class Model(ModelDesc):
     def _get_input_vars(self):
         return [InputVar(tf.float32, [None, INP_SIZE, INP_SIZE, 3], 'input'),
                 InputVar(tf.int32, [None], 'label') ]
-    
+
+
     def _build_graph(self, input_vars):
         image, label = input_vars
         image = image / 255.0
@@ -126,9 +157,22 @@ class Model(ModelDesc):
         
         with argscope([Conv2D, MaxPooling, GlobalAvgPooling, BatchNormV2]):
             #image = LinearWrap(image)
-            logits = resnet_backbone(
-                image, [3, 4, 6, 3],
-                resnet_group, resnet_bottleneck)
+            logits = (LinearWrap(image)
+                      # use explicit padding here, because our private training framework has
+                      # different padding mechanisms from TensorFlow
+                      .tf.pad([[0, 0], [3, 2], [3, 2], [0, 0]])
+                      .Conv2D('conv1', 64, 7, stride=2, padding='VALID', use_bias=True)
+                      .tf.pad([[0, 0], [1, 1], [1, 1], [0, 0]], 'SYMMETRIC')
+                      .MaxPooling('pool1', 3, 2, padding='VALID')
+                      .apply(group, 'conv2', 64, 2, 1)
+                      .apply(group, 'conv3', 128, 2, 2)
+                      .apply(group, 'conv4', 256, 2, 2)
+                      .apply(group, 'conv5', 512, 2, 2)
+                      .BatchNorm('lastbn')
+                      .apply(activate)
+                      .GlobalAvgPooling('gap')
+                      .tf.multiply(49)  # this is due to a bug in our model design
+                      .FullyConnected('fct', 200)())
 
         #tf.get_variable = old_get_variable
 
