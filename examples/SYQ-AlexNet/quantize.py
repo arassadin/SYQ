@@ -29,8 +29,8 @@ def fine_grained_quant(x, eta, name, INITIAL, value, binary=True):
             for j in range(shape[1].value):
                 ws = w_s[(shape[1].value*i) + j, 0]
                 mask = tf.ones(shape)
-                mask_p = tf.select(x[i,j,:,:] > eta_x, mask[i,j,:,:] * ws, mask[i,j,:,:])
-                mask_np = tf.select(x[i,j,:,:] < -eta_x, mask[i,j,:,:] * ws, mask_p)
+                mask_p = tf.where(x[i,j,:,:] > eta_x, mask[i,j,:,:] * ws, mask[i,j,:,:]) #where = select
+                mask_np = tf.where(x[i,j,:,:] < -eta_x, mask[i,j,:,:] * ws, mask_p)
                 list_of_masks.append(mask_np)
                 
         masker = tf.stack(list_of_masks)
@@ -39,14 +39,14 @@ def fine_grained_quant(x, eta, name, INITIAL, value, binary=True):
         if binary:
             mask_z = tf.ones(shape)
         else:
-            mask_z = tf.select((x < eta_x) & (x > - eta_x), tf.zeros(shape), tf.ones(shape))
+            mask_z = tf.where((x < eta_x) & (x > - eta_x), tf.zeros(shape), tf.ones(shape))
 
         with G.gradient_override_map({"Sign": "Identity", "Mul": "Add"}):
             w =  tf.sign(x) * tf.stop_gradient(mask_z)
 
         w = w * masker
 
-        tf.histogram_summary(w.name, w)
+        #tf.histogram_summary(w.name, w)
     else:
 
         if INITIAL:
@@ -55,23 +55,23 @@ def fine_grained_quant(x, eta, name, INITIAL, value, binary=True):
             wn = tf.get_variable('Wn', collections=[tf.GraphKeys.VARIABLES, 'scale_fc'], initializer=1.0)
 
         #tf.scalar_summary(wp.name, wp)
-        tf.scalar_summary(wn.name, wn)
+        #tf.scalar_summary(wn.name, wn)
 
         mask = tf.ones(shape)
-        mask_p = tf.select(x > eta_x, tf.ones(shape) * wn, mask)
-        mask_np = tf.select(x < -eta_x, tf.ones(shape) * wn, mask_p)
+        mask_p = tf.where(x > eta_x, tf.ones(shape) * wn, mask)
+        mask_np = tf.where(x < -eta_x, tf.ones(shape) * wn, mask_p)
         
         if binary:
             mask_z = tf.ones(shape)
         else:
-            mask_z = tf.select((x < eta_x) & (x > - eta_x), tf.zeros(shape), tf.ones(shape))
+            mask_z = tf.where((x < eta_x) & (x > - eta_x), tf.zeros(shape), tf.ones(shape))
 
         with G.gradient_override_map({"Sign": "Identity", "Mul": "Add"}):
             w =  tf.sign(x) * tf.stop_gradient(mask_z)
 
         w = w * mask_np
 
-        tf.histogram_summary(w.name, w)
+        #tf.histogram_summary(w.name, w)
 
 
     return w
@@ -98,8 +98,8 @@ def rows_quant(x, eta, name, INITIAL, value, binary=True):
         for j in range(shape[0].value):
             ws = w_s[j , 0]
             mask = tf.ones(shape)
-            mask_p = tf.select(x[i,:,:,:] > eta_x, mask[i,:,:,:] * ws, mask[i,:,:,:])
-            mask_np = tf.select(x[i,:,:,:] < -eta_x, mask[i,:,:,:] * ws, mask_p)
+            mask_p = tf.where(x[i,:,:,:] > eta_x, mask[i,:,:,:] * ws, mask[i,:,:,:])
+            mask_np = tf.where(x[i,:,:,:] < -eta_x, mask[i,:,:,:] * ws, mask_p)
             list_of_masks.append(mask_np)
 
         masker = tf.stack(list_of_masks)
@@ -108,14 +108,14 @@ def rows_quant(x, eta, name, INITIAL, value, binary=True):
         if binary:
             mask_z = tf.ones(shape)
         else:
-            mask_z = tf.select((x < eta_x) & (x > - eta_x), tf.zeros(shape), tf.ones(shape))
+            mask_z = tf.where((x < eta_x) & (x > - eta_x), tf.zeros(shape), tf.ones(shape))
 
         with G.gradient_override_map({"Sign": "Identity", "Mul": "Add"}):
             w =  tf.sign(x) * tf.stop_gradient(mask_z)
 
         w = w * masker
 
-        tf.histogram_summary(w.name, w)
+        #tf.histogram_summary(w.name, w)
 
     else:
         if INITIAL:
@@ -123,23 +123,23 @@ def rows_quant(x, eta, name, INITIAL, value, binary=True):
         else:
             wn = tf.get_variable('Wn', collections=[tf.GraphKeys.VARIABLES, 'scale_fc'], initializer=1.0)
 
-        tf.scalar_summary(wn.name, wn)
+        #tf.scalar_summary(wn.name, wn)
 
         mask = tf.ones(shape)
-        mask_p = tf.select(x > eta_x, tf.ones(shape) * wn, mask)
-        mask_np = tf.select(x < -eta_x, tf.ones(shape) * wn, mask_p)
+        mask_p = tf.where(x > eta_x, tf.ones(shape) * wn, mask)
+        mask_np = tf.where(x < -eta_x, tf.ones(shape) * wn, mask_p)
         
         if binary:
             mask_z = tf.ones(shape)
         else:
-            mask_z = tf.select((x < eta_x) & (x > - eta_x), tf.zeros(shape), tf.ones(shape))
+            mask_z = tf.where((x < eta_x) & (x > - eta_x), tf.zeros(shape), tf.ones(shape))
 
         with G.gradient_override_map({"Sign": "Identity", "Mul": "Add"}):
             w =  tf.sign(x) * tf.stop_gradient(mask_z)
 
         w = w * mask_np
 
-        tf.histogram_summary(w.name, w)
+        #tf.histogram_summary(w.name, w)
 
     return w
 
