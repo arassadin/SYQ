@@ -8,6 +8,7 @@ import math
 
 from ._common import layer_register
 from ..tfutils import symbolic_functions as symbf
+from ..utils import logger
 
 __all__ = ['FullyConnected']
 
